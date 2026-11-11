@@ -1,0 +1,1733 @@
+-- G7 Queries & Triggers Script
+-- Code by Alex Vilamitjana, Oriol Pros and Sara Gibert
+
+-- !IMPORTANT! This script does not follow any template 
+-- (as it is indicated in the statement), since the template was not uploaded on
+-- eStudy.
+
+---------- QUERIES ----------
+
+-- 1) Which athletes have won more medals than the average number of medals won per athlete across all disciplines?
+
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME  AS ATHLETE_NAME,
+    COUNT(W.MEDAL_ID) AS TOTAL_MEDALS
+FROM
+         ATHLETE A
+    JOIN PERSON       P ON A.ATHLETE_CODE = P.PERSON_CODE
+    JOIN ATHLETE_WINS W ON A.ATHLETE_CODE = W.ATHLETE_CODE
+WHERE
+    W.IS_MEDALLIST = 'True'
+GROUP BY
+    P.FIRST_NAME,
+    P.SECOND_NAME,
+    A.ATHLETE_CODE
+HAVING
+    TOTAL_MEDALS > (
+        SELECT
+            AVG(MEDAL_COUNT)
+        FROM
+            (
+                SELECT
+                    COUNT(W2.MEDAL_ID) AS MEDAL_COUNT
+                FROM
+                    ATHLETE_WINS W2
+                WHERE
+                    W2.IS_MEDALLIST = 'True'
+                GROUP BY
+                    W2.ATHLETE_CODE
+            )
+    )
+ORDER BY
+    TOTAL_MEDALS DESC;
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    W.MEDAL_ID
+FROM
+         ATHLETE A
+    JOIN PERSON       P ON A.ATHLETE_CODE = P.PERSON_CODE
+    JOIN ATHLETE_WINS W ON A.ATHLETE_CODE = W.ATHLETE_CODE
+WHERE
+        W.IS_MEDALLIST = 'True'
+    AND ( UPPER(P.FIRST_NAME) LIKE '%MOLLIE%' );
+
+
+-- 2) Which countries have managed to win medals in all three categories for individual athletes: gold, silver, and bronze?
+SELECT
+    C.COUNTRY
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS W ON A.ATHLETE_CODE = W.ATHLETE_CODE
+    JOIN MEDAL        M ON W.MEDAL_ID = M.MEDAL_ID
+WHERE
+    W.IS_MEDALLIST = 'True'
+GROUP BY
+    C.COUNTRY
+HAVING SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Gold Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) > 0
+       AND SUM(
+    CASE
+        WHEN M.MEDAL_TYPE = 'Silver Medal' THEN
+            1
+        ELSE
+            0
+    END
+) > 0
+       AND SUM(
+    CASE
+        WHEN M.MEDAL_TYPE = 'Bronze Medal' THEN
+            1
+        ELSE
+            0
+    END
+) > 0;
+
+-- Validation
+
+SELECT
+    C.COUNTRY,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Gold Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS GOLD_COUNT,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Silver Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS SILVER_COUNT,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Bronze Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS BRONZE_COUNT
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS W ON A.ATHLETE_CODE = W.ATHLETE_CODE
+    JOIN MEDAL        M ON W.MEDAL_ID = M.MEDAL_ID
+WHERE
+    C.COUNTRY IN ( 'IR Iran', 'Poland', 'United States' )
+    AND W.IS_MEDALLIST = 'True'
+GROUP BY
+    C.COUNTRY;
+
+
+-- 3) Which coaches are currently managing more athletes than the average number of athletes per coach?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME      AS COACH_NAME,
+    COUNT(M.ATHLETE_CODE) AS ATHLETE_COUNT
+FROM
+         PERSON P
+    JOIN COACH   C ON P.PERSON_CODE = C.COACH_CODE
+    JOIN MEMBERS M ON C.COACH_CODE = M.COACH_CODE
+GROUP BY
+    P.FIRST_NAME,
+    P.SECOND_NAME,
+    C.COACH_CODE
+HAVING
+    COUNT(M.ATHLETE_CODE) > (
+        SELECT
+            AVG(ATHLETES_PER_COACH)
+        FROM
+            (
+                SELECT
+                    COUNT(M2.ATHLETE_CODE) AS ATHLETES_PER_COACH
+                FROM
+                    MEMBERS M2
+                GROUP BY
+                    M2.COACH_CODE
+            )
+    )
+ORDER BY
+    ATHLETE_COUNT DESC;
+
+-- Validation
+SELECT
+    P1.FIRST_NAME
+    || ' '
+    || P1.SECOND_NAME AS COACH_NAME,
+    P2.FIRST_NAME
+    || ' '
+    || P2.SECOND_NAME AS ATHLETE_NAME
+FROM
+         PERSON P1
+    JOIN COACH   C ON P1.PERSON_CODE = C.COACH_CODE
+    JOIN MEMBERS M ON C.COACH_CODE = M.COACH_CODE
+    JOIN ATHLETE A ON M.ATHLETE_CODE = A.ATHLETE_CODE
+    JOIN PERSON  P2 ON A.ATHLETE_CODE = P2.PERSON_CODE
+WHERE
+    UPPER(P1.FIRST_NAME) LIKE '%MICHAEL%'
+    AND UPPER(P1.SECOND_NAME) LIKE '%BRUUN%';
+
+
+-- 4) Which 5 disciplines have a higher number of female participants than male participants?
+SELECT
+    D.DISCIPLINE,
+    SUM(
+        CASE
+            WHEN P.GENDER = 'Male' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS MALE_COUNT,
+    SUM(
+        CASE
+            WHEN P.GENDER = 'Female' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS FEMALE_COUNT
+FROM
+         DISCIPLINE D
+    JOIN PERSON_PARTICIPATES PP ON D.DISCIPLINE = PP.DISCIPLINE
+    JOIN PERSON              P ON PP.PERSON_CODE = P.PERSON_CODE
+GROUP BY
+    D.DISCIPLINE,
+    D.DISCIPLINE_CODE
+HAVING
+    FEMALE_COUNT > MALE_COUNT
+ORDER BY
+    FEMALE_COUNT DESC
+FETCH FIRST 5 ROWS ONLY;
+
+-- Validation
+
+SELECT
+    GENDER,
+    COUNT(*)
+FROM
+         PERSON P
+    JOIN PERSON_PARTICIPATES PP ON P.PERSON_CODE = PP.PERSON_CODE
+WHERE
+    PP.DISCIPLINE = 'Rhythmic Gymnastics'
+GROUP BY
+    GENDER;
+
+
+-- 5) Which athletes have managed to win medals and participate in more than 10 unique events?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME           AS ATHLETE_NAME,
+    A.ATHLETE_CODE,
+    COUNT(DISTINCT E.EVENT_ID) AS TOTAL_EVENTS
+FROM
+         PERSON P
+    JOIN ATHLETE              A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS         AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN AWARDS               AWD ON AW.MEDAL_ID = AWD.MEDAL_ID
+    JOIN ATHLETE_PARTICIPATES PP ON A.ATHLETE_CODE = PP.ATHLETE_CODE
+    JOIN EVENT                E ON PP.EVENT_ID = E.EVENT_ID
+WHERE
+    AW.IS_MEDALLIST = 'True'
+GROUP BY
+    P.FIRST_NAME,
+    P.SECOND_NAME,
+    A.ATHLETE_CODE
+HAVING
+    TOTAL_EVENTS > 10
+ORDER BY
+    TOTAL_EVENTS DESC;
+
+-- Validation
+SELECT
+    E.EVENT_ID
+FROM
+         PERSON P
+    JOIN ATHLETE              A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_PARTICIPATES PP ON A.ATHLETE_CODE = PP.ATHLETE_CODE
+    JOIN EVENT                E ON PP.EVENT_ID = E.EVENT_ID
+WHERE
+    ( P.FIRST_NAME = 'Ruoteng'
+      AND P.SECOND_NAME = 'XIAO' )
+ORDER BY
+    E.EVENT_ID;
+
+
+-- 6) Which venues have hosted events belonging to more than one different sport?
+SELECT
+    V.VENUE_NAME,
+    COUNT(DISTINCT SWC.SPORT_CODE) AS TOTAL_SPORTS
+FROM
+         VENUE V
+    JOIN SCHEDULE  SCH ON V.VENUE_CODE = SCH.VENUE
+    JOIN EVENT     E ON SCH.EVENT_ID = E.EVENT_ID
+    JOIN SHOWCASES SWC ON E.EVENT_ID = SWC.EVENT_ID
+    JOIN SPORT     S ON SWC.SPORT_CODE = S.SPORT_CODE
+GROUP BY
+    V.VENUE_NAME
+HAVING
+    TOTAL_SPORTS > 1;
+
+-- Validation
+SELECT
+    V.VENUE_NAME,
+    S.SPORT,
+    COUNT(DISTINCT SCH.EVENT_ID) AS EVENTS
+FROM
+         VENUE V
+    JOIN SCHEDULE  SCH ON V.VENUE_CODE = SCH.VENUE
+    JOIN SHOWCASES SWC ON SCH.EVENT_ID = SWC.EVENT_ID
+    JOIN SPORT     S ON SWC.SPORT_CODE = S.SPORT_CODE
+WHERE
+    V.VENUE_NAME <= ALL (
+        SELECT
+            V2.VENUE_NAME
+        FROM
+                 VENUE V2
+            JOIN SCHEDULE  SCH2 ON V2.VENUE_CODE = SCH2.VENUE
+            JOIN SHOWCASES SWC2 ON SCH2.EVENT_ID = SWC2.EVENT_ID
+        GROUP BY
+            V2.VENUE_NAME
+        HAVING
+            COUNT(DISTINCT SWC2.SPORT_CODE) > 1
+    )
+GROUP BY
+    V.VENUE_NAME,
+    S.SPORT;
+
+
+-- 7) Which athletes representing Spain have also studied in University at Spain?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    E.EDUCATION
+FROM
+         PERSON P
+    JOIN ATHLETE   A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATTENDED  ATT ON A.ATHLETE_CODE = ATT.ATHLETE_CODE
+    JOIN EDUCATION E ON ATT.EDUCATION_ID = E.EDUCATION_ID
+WHERE
+    ( UPPER(E.EDUCATION) LIKE '%UNIVERSITY%'
+      AND UPPER(E.EDUCATION) LIKE '%(ESP)%' )
+    AND P.NOC_CODE = 'ESP';
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    P.NOC_CODE
+FROM
+         PERSON P
+    JOIN ATHLETE A ON P.PERSON_CODE = A.ATHLETE_CODE
+WHERE
+    ( UPPER(P.FIRST_NAME) = 'SAUL'
+      AND UPPER(P.SECOND_NAME) = 'CRAVIOTTO' )
+    OR ( UPPER(P.FIRST_NAME) = 'ALVARO'
+         AND UPPER(P.SECOND_NAME) = 'MARTIN' );
+
+
+-- 8) Which coaches are training athletes across more than one discipline at the same time?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME              AS COACH_NAME,
+    C.COACH_CODE,
+    COUNT(DISTINCT PP.DISCIPLINE) AS TRAINING_DISCIPLINES
+FROM
+         PERSON P
+    JOIN COACH               C ON P.PERSON_CODE = C.COACH_CODE
+    JOIN MEMBERS             M ON C.COACH_CODE = M.COACH_CODE
+    JOIN ATHLETE             A ON M.ATHLETE_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON A.ATHLETE_CODE = PP.PERSON_CODE
+GROUP BY
+    P.FIRST_NAME,
+    P.SECOND_NAME,
+    C.COACH_CODE
+HAVING
+    COUNT(DISTINCT PP.DISCIPLINE) > 1;
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS COACH_NAME,
+    PP.DISCIPLINE
+FROM
+         PERSON P
+    JOIN COACH               C ON P.PERSON_CODE = C.COACH_CODE
+    JOIN MEMBERS             M ON C.COACH_CODE = M.COACH_CODE
+    JOIN ATHLETE             A ON M.ATHLETE_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON A.ATHLETE_CODE = PP.PERSON_CODE
+WHERE
+    C.COACH_CODE = 1940093;
+
+
+-- 9) Which countries have sent more athletes to compete than the average number of athletes per country?
+SELECT
+    C.COUNTRY,
+    COUNT(A.ATHLETE_CODE) AS ATHLETE_COUNT
+FROM
+         COUNTRY C
+    JOIN PERSON  P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE A ON P.PERSON_CODE = A.ATHLETE_CODE
+GROUP BY
+    C.COUNTRY,
+    C.NOC_CODE
+HAVING
+    COUNT(A.ATHLETE_CODE) > (
+        SELECT
+            AVG(ATHLETES_PER_COUNTRY)
+        FROM
+            (
+                SELECT
+                    COUNT(ATHLETE_CODE) AS ATHLETES_PER_COUNTRY
+                FROM
+                         PERSON P2
+                    JOIN ATHLETE A2 ON P2.PERSON_CODE = A2.ATHLETE_CODE
+                GROUP BY
+                    P2.NOC_CODE
+            )
+    )
+ORDER BY
+    ATHLETE_COUNT DESC;
+
+-- Validation
+SELECT
+    COUNT(A.ATHLETE_CODE) / COUNT(DISTINCT P.NOC_CODE) AS GLOBAL_AVG
+FROM
+         PERSON P
+    JOIN ATHLETE A ON P.PERSON_CODE = A.ATHLETE_CODE;
+
+SELECT
+    C.COUNTRY,
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         COUNTRY C
+    JOIN PERSON  P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE A ON P.PERSON_CODE = A.ATHLETE_CODE
+WHERE
+    C.COUNTRY = 'Finland'
+GROUP BY
+    C.COUNTRY,
+    P.FIRST_NAME,
+    P.SECOND_NAME;
+
+
+-- 10) Which sports have had their events spread across the highest number of different venues?
+SELECT
+    SP.SPORT,
+    COUNT(DISTINCT SCH.VENUE) AS VENUE_COUNT
+FROM
+         SPORT SP
+    JOIN SHOWCASES SWC ON SP.SPORT_CODE = SWC.SPORT_CODE
+    JOIN SCHEDULE  SCH ON SWC.EVENT_ID = SCH.EVENT_ID
+GROUP BY
+    SP.SPORT,
+    SP.SPORT_CODE
+ORDER BY
+    VENUE_COUNT DESC
+FETCH FIRST 5 ROWS ONLY;
+
+-- Validation
+
+SELECT
+    SP.SPORT,
+    V.VENUE_NAME
+FROM
+         SPORT SP
+    JOIN SHOWCASES SWC ON SP.SPORT_CODE = SWC.SPORT_CODE
+    JOIN SCHEDULE  SCH ON SWC.EVENT_ID = SCH.EVENT_ID
+    JOIN VENUE     V ON SCH.VENUE = V.VENUE_CODE
+WHERE
+    SP.SPORT = '3x3 Basketball'
+GROUP BY
+    SP.SPORT,
+    V.VENUE_NAME;
+
+
+-- 11) Which athletes share the same personal hero (father) and have also won at least one medal?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    PER.HERO
+FROM
+         ATHLETE A
+    JOIN PERSON       P ON A.ATHLETE_CODE = P.PERSON_CODE
+    JOIN PERSONALITY  PER ON A.PERSONALITY_ID = PER.PERSONALITY_ID
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+    ( LOWER(PER.HERO) LIKE '%father%'
+      OR LOWER(PER.HERO) LIKE '%dad%' )
+    AND AW.IS_MEDALLIST = 'True'
+    AND PER.HERO IS NOT NULL;
+
+-- Validation
+SELECT
+    COUNT(DISTINCT A.ATHLETE_CODE) AS MEDALIST_WITH_FATHER_HERO
+FROM
+         ATHLETE A
+    JOIN PERSONALITY  PER ON A.PERSONALITY_ID = PER.PERSONALITY_ID
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+    ( LOWER(PER.HERO) LIKE '%father%'
+      OR LOWER(PER.HERO) LIKE '%dad%' )
+    AND AW.IS_MEDALLIST = 'True'
+    AND PER.HERO IS NOT NULL;
+
+SELECT
+    PER.HERO
+FROM
+         ATHLETE A
+    JOIN PERSON      P ON A.ATHLETE_CODE = P.PERSON_CODE
+    JOIN PERSONALITY PER ON A.PERSONALITY_ID = PER.PERSONALITY_ID
+WHERE
+    P.SECOND_NAME LIKE '%JUNG%';
+
+
+-- 12) Which disciplines include both athletes born in the same country they represent and athletes born in a different country from the one they represent?
+SELECT
+    D.DISCIPLINE,
+    COUNT(DISTINCT
+        CASE
+            WHEN P.BIRTH_COUNTRY = C.NOC_CODE THEN
+                A.ATHLETE_CODE
+        END
+    ) AS NATIVE_ATHLETES,
+    COUNT(DISTINCT
+        CASE
+            WHEN P.BIRTH_COUNTRY <> C.NOC_CODE THEN
+                A.ATHLETE_CODE
+        END
+    ) AS FOREIGN_ATHLETES
+FROM
+         DISCIPLINE D
+    JOIN PERSON_PARTICIPATES PP ON D.DISCIPLINE = PP.DISCIPLINE
+    JOIN PERSON              P ON PP.PERSON_CODE = P.PERSON_CODE
+    JOIN ATHLETE             A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN COUNTRY             C ON P.NOC_CODE = C.NOC_CODE
+WHERE
+    P.BIRTH_COUNTRY IS NOT NULL
+GROUP BY
+    D.DISCIPLINE
+HAVING NATIVE_ATHLETES > 0
+       AND FOREIGN_ATHLETES > 0
+ORDER BY
+    NATIVE_ATHLETES DESC;
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         PERSON P
+    JOIN ATHLETE             A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON A.ATHLETE_CODE = PP.PERSON_CODE
+WHERE
+        PP.DISCIPLINE = 'Boxing'
+    AND P.BIRTH_COUNTRY = P.NOC_CODE;
+
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         PERSON P
+    JOIN ATHLETE             A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON A.ATHLETE_CODE = PP.PERSON_CODE
+WHERE
+        PP.DISCIPLINE = 'Boxing'
+    AND P.BIRTH_COUNTRY <> P.NOC_CODE;
+
+   
+
+-- 13) Which athletes were born in the same country they are representing and have won at least one gold medal?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME   AS ATHLETE_NAME,
+    C.COUNTRY,
+    P.BIRTH_COUNTRY,
+    COUNT(AW.MEDAL_ID) AS GOLD_MEDAL
+FROM
+         PERSON P
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN COUNTRY      C ON P.NOC_CODE = C.NOC_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN MEDAL        M ON AW.MEDAL_ID = M.MEDAL_ID
+WHERE
+        P.BIRTH_COUNTRY = C.NOC_CODE
+    AND M.MEDAL_TYPE = 'Gold Medal'
+GROUP BY
+    P.PERSON_CODE,
+    P.FIRST_NAME,
+    P.SECOND_NAME,
+    C.COUNTRY,
+    BIRTH_COUNTRY
+ORDER BY
+    GOLD_MEDAL DESC;
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    M.MEDAL_TYPE,
+    M.MEDAL_ID
+FROM
+         PERSON P
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN MEDAL        M ON AW.MEDAL_ID = M.MEDAL_ID
+WHERE
+        P.FIRST_NAME = 'Shinnosuke'
+    AND P.SECOND_NAME = 'OKA'
+    AND M.MEDAL_TYPE = 'Gold Medal';
+
+
+-- 14) Which disciplines have an average athlete age that is higher than the global average age across all disciplines?
+SELECT
+    PP.DISCIPLINE,
+    ROUND(
+        AVG(MONTHS_BETWEEN(SYSDATE, P.BIRTH_DATE) / 12),
+        1
+    ) AS AVG_AGE
+FROM
+         PERSON P
+    JOIN ATHLETE             A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON P.PERSON_CODE = PP.PERSON_CODE
+WHERE
+    P.BIRTH_DATE IS NOT NULL
+GROUP BY
+    PP.DISCIPLINE
+HAVING
+    AVG(MONTHS_BETWEEN(SYSDATE, P.BIRTH_DATE) / 12) > (
+        SELECT
+            AVG(MONTHS_BETWEEN(SYSDATE, P2.BIRTH_DATE) / 12)
+        FROM
+                 PERSON P2
+            JOIN ATHLETE A2 ON P2.PERSON_CODE = A2.ATHLETE_CODE
+        WHERE
+            P2.BIRTH_DATE IS NOT NULL
+    )
+ORDER BY
+    AVG_AGE DESC;
+
+-- Validation
+SELECT
+    ROUND(
+        AVG(MONTHS_BETWEEN(SYSDATE, P.BIRTH_DATE) / 12),
+        1
+    ) AS GLOBAL_AVG_AGE
+FROM
+         PERSON P
+    JOIN ATHLETE A ON P.PERSON_CODE = A.ATHLETE_CODE
+WHERE
+    P.BIRTH_DATE IS NOT NULL;
+
+SELECT
+    PP.DISCIPLINE,
+    ROUND(
+        AVG(MONTHS_BETWEEN(SYSDATE, P.BIRTH_DATE) / 12),
+        1
+    ) AS AVG_AGE
+FROM
+         PERSON P
+    JOIN ATHLETE             A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON P.PERSON_CODE = PP.PERSON_CODE
+WHERE
+        PP.DISCIPLINE = 'Equestrian'
+    AND P.BIRTH_DATE IS NOT NULL
+GROUP BY
+    PP.DISCIPLINE;
+
+
+-- 15) Which organizations have technical officials involucrate in more than ten different disciplines?
+SELECT
+    TOF.ORGANISATION,
+    COUNT(DISTINCT D.DISCIPLINE) AS DISCIPLINES_COVERED
+FROM
+         TECHNICAL_OFFICIAL TOF
+    JOIN PERSON              P ON TOF.TECH_CODE = P.PERSON_CODE
+    JOIN PERSON_PARTICIPATES PC ON P.PERSON_CODE = PC.PERSON_CODE
+    JOIN DISCIPLINE          D ON PC.DISCIPLINE = D.DISCIPLINE
+GROUP BY
+    TOF.ORGANISATION
+HAVING
+    COUNT(DISTINCT D.DISCIPLINE) > 10
+ORDER BY
+    DISCIPLINES_COVERED DESC;
+
+-- Validation
+SELECT DISTINCT
+    D.DISCIPLINE
+FROM
+         TECHNICAL_OFFICIAL TOF
+    JOIN PERSON              P ON TOF.TECH_CODE = P.PERSON_CODE
+    JOIN PERSON_PARTICIPATES PC ON P.PERSON_CODE = PC.PERSON_CODE
+    JOIN DISCIPLINE          D ON PC.DISCIPLINE = D.DISCIPLINE
+WHERE
+    TOF.ORGANISATION = 'FRA'
+ORDER BY
+    D.DISCIPLINE;
+
+
+-- 16) Which athletes have won at least one medal and also have a sister who also does sports?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         PERSON P
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN IS_FAMILY_OF IFO ON P.PERSON_CODE = IFO.FAMILY_CODE
+WHERE
+        AW.IS_MEDALLIST = 'True'
+    AND IFO.IS_SPORTING_RELATIVE = 'False'
+    AND LOWER(IFO.FAMILY_MEMBER) LIKE '%sister%';
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME  AS ATHLETE_NAME,
+    IFO.FAMILY_MEMBER AS FAMILY_INFO,
+    IFO.IS_SPORTING_RELATIVE
+FROM
+         PERSON P
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN IS_FAMILY_OF IFO ON P.PERSON_CODE = IFO.FAMILY_CODE
+WHERE
+    P.SECOND_NAME LIKE '%MATIC%';
+
+
+-- 17) Which countries have athletes competing in every discipline currently scheduled in the Olympic Games?
+SELECT
+    C.COUNTRY,
+    COUNT(DISTINCT PP.DISCIPLINE) AS DISCIPLINES_TOTAL
+FROM
+         PERSON P
+    JOIN ATHLETE             A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON P.PERSON_CODE = PP.PERSON_CODE
+    JOIN COUNTRY             C ON P.NOC_CODE = C.NOC_CODE
+GROUP BY
+    C.COUNTRY
+HAVING
+    DISCIPLINES_TOTAL = (
+        SELECT
+            COUNT(*)
+        FROM
+            DISCIPLINE
+    )
+ORDER BY
+    DISCIPLINES_TOTAL DESC;
+
+-- Validation
+SELECT
+    COUNT(*) AS TOTAL_DISCIPLINES
+FROM
+    DISCIPLINE;
+
+SELECT
+    C.COUNTRY,
+    COUNT(DISTINCT PP.DISCIPLINE) AS DISCIPLINES_TOTAL
+FROM
+         PERSON P
+    JOIN ATHLETE             A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN PERSON_PARTICIPATES PP ON P.PERSON_CODE = PP.PERSON_CODE
+    JOIN COUNTRY             C ON P.NOC_CODE = C.NOC_CODE
+GROUP BY
+    C.COUNTRY
+ORDER BY
+    DISCIPLINES_TOTAL DESC;
+
+
+-- 18) Which coaches have never had any of their athletes win a medal throughout the competition?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS COACH_NAME
+FROM
+         PERSON P
+    JOIN COACH C ON P.PERSON_CODE = C.COACH_CODE
+MINUS
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS COACH_NAME
+FROM
+         PERSON P
+    JOIN COACH        C ON P.PERSON_CODE = C.COACH_CODE
+    JOIN MEMBERS      M ON C.COACH_CODE = M.COACH_CODE
+    JOIN ATHLETE      A ON M.ATHLETE_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+    AW.IS_MEDALLIST = 'True';
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS COACH_NAME,
+    COUNT(DISTINCT
+        CASE
+            WHEN AW.IS_MEDALLIST = 'True' THEN
+                A.ATHLETE_CODE
+        END
+    )                AS MEDAL_ATHLETES
+FROM
+         PERSON P
+    JOIN COACH        C ON P.PERSON_CODE = C.COACH_CODE
+    LEFT JOIN MEMBERS      M ON C.COACH_CODE = M.COACH_CODE
+    LEFT JOIN ATHLETE      A ON M.ATHLETE_CODE = A.ATHLETE_CODE
+    LEFT JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+        P.FIRST_NAME = 'Olesia'
+    AND P.SECOND_NAME = 'ZAITSEVA'
+GROUP BY
+    P.FIRST_NAME,
+    P.SECOND_NAME;
+
+
+-- 19) Which nationalities appear most frequently among the athletes who have won gold medals?
+SELECT
+    C.COUNTRY,
+    COUNT(AW.MEDAL_ID) AS GOLD_MEDALS
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN MEDAL        M ON AW.MEDAL_ID = M.MEDAL_ID
+WHERE
+        AW.IS_MEDALLIST = 'True'
+    AND M.MEDAL_TYPE = 'Gold Medal'
+GROUP BY
+    C.COUNTRY
+ORDER BY
+    GOLD_MEDALS DESC
+FETCH FIRST 10 ROWS ONLY;
+
+-- Validation
+
+SELECT DISTINCT
+    C.COUNTRY,
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN MEDAL        M ON AW.MEDAL_ID = M.MEDAL_ID
+WHERE
+        C.COUNTRY = 'Italy'
+    AND AW.IS_MEDALLIST = 'True'
+    AND M.MEDAL_TYPE = 'Gold Medal'
+ORDER BY
+    ATHLETE_NAME;
+
+
+-- 20)  Which disciplines have the lowest total number of athletes registered to compete?
+SELECT
+    PP.DISCIPLINE,
+    COUNT(DISTINCT PP.PERSON_CODE) AS TOTAL_ATHLETES
+FROM
+         PERSON_PARTICIPATES PP
+    JOIN ATHLETE A ON PP.PERSON_CODE = A.ATHLETE_CODE
+GROUP BY
+    PP.DISCIPLINE
+ORDER BY
+    TOTAL_ATHLETES ASC
+FETCH FIRST 10 ROWS ONLY;
+
+-- Validation
+
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         PERSON_PARTICIPATES PP
+    JOIN ATHLETE A ON PP.PERSON_CODE = A.ATHLETE_CODE
+    JOIN PERSON  P ON A.ATHLETE_CODE = P.PERSON_CODE
+WHERE
+    PP.DISCIPLINE LIKE '%Surfing%';
+
+
+-- 21)  Which 3 days in the schedule have the highest amount of scheduled events starting at the same time?
+SELECT
+    SUBSTR(S.START_DATE, 1, 10) AS EVENT_DAY,
+    SUBSTR(S.START_DATE, 12, 5) AS START_TIME,
+    COUNT(*)                    AS EVENT_COUNT
+FROM
+    SCHEDULE S
+GROUP BY
+    EVENT_DAY,
+    START_TIME
+ORDER BY
+    EVENT_COUNT DESC
+FETCH FIRST 3 ROWS ONLY;
+
+-- Validation
+
+SELECT
+    *
+FROM
+    SCHEDULE
+WHERE
+        SUBSTR(START_DATE, 1, 10) = '2024-07-30'
+    AND SUBSTR(START_DATE, 12, 5) = '12:00';
+
+
+-- 22) Which athletes are currently living in a country different from the one they are officially representing?
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    R.RESIDENCE_COUNTRY,
+    C.COUNTRY
+FROM
+         PERSON P
+    JOIN COUNTRY   C ON P.NOC_CODE = C.NOC_CODE
+    JOIN ATHLETE   A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN LIVES     L ON A.ATHLETE_CODE = L.ATHLETE_CODE
+    JOIN RESIDENCE R ON L.RESIDENCE_ID = R.RESIDENCE_ID
+WHERE
+    R.RESIDENCE_COUNTRY <> C.COUNTRY
+GROUP BY
+    P.FIRST_NAME,
+    P.SECOND_NAME,
+    R.RESIDENCE_COUNTRY,
+    C.COUNTRY;
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    R.RESIDENCE_COUNTRY,
+    C.COUNTRY
+FROM
+         PERSON P
+    JOIN COUNTRY   C ON P.NOC_CODE = C.NOC_CODE
+    JOIN ATHLETE   A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN LIVES     L ON A.ATHLETE_CODE = L.ATHLETE_CODE
+    JOIN RESIDENCE R ON L.RESIDENCE_ID = R.RESIDENCE_ID
+WHERE
+        P.SECOND_NAME = 'HAKIMI'
+    AND P.FIRST_NAME = 'Achraf'
+GROUP BY
+    P.FIRST_NAME,
+    P.SECOND_NAME,
+    R.RESIDENCE_COUNTRY,
+    C.COUNTRY;
+
+
+-- 23)  Which sports have had all their events concentrated in the fewest number of venues?
+SELECT
+    S.SPORT,
+    COUNT(DISTINCT SCH.VENUE) AS VENUE_COUNT
+FROM
+         SPORT S
+    JOIN SHOWCASES SH ON S.SPORT_CODE = SH.SPORT_CODE
+    JOIN EVENT     E ON SH.EVENT_ID = E.EVENT_ID
+    JOIN SCHEDULE  SCH ON E.EVENT_ID = SCH.EVENT_ID
+GROUP BY
+    S.SPORT
+ORDER BY
+    VENUE_COUNT ASC;
+
+-- Validation
+SELECT
+    SP.SPORT,
+    V.VENUE_NAME
+FROM
+         SPORT SP
+    JOIN SHOWCASES SWC ON SP.SPORT_CODE = SWC.SPORT_CODE
+    JOIN EVENT     E ON SWC.EVENT_ID = E.EVENT_ID
+    JOIN SCHEDULE  SCH ON E.EVENT_ID = SCH.EVENT_ID
+    JOIN VENUE     V ON SCH.VENUE = V.VENUE_CODE
+WHERE
+    SP.SPORT LIKE 'Swimming'
+GROUP BY
+    SP.SPORT,
+    V.VENUE_NAME;
+
+
+-- 24) Which venues have hosted the highest number of different events within a single competition day?
+SELECT
+    V.VENUE_NAME,
+    S.DAY,
+    COUNT(DISTINCT S.EVENT_ID) AS COUNT_EVENTS
+FROM
+         VENUE V
+    JOIN SCHEDULE S ON V.VENUE_CODE = S.VENUE
+GROUP BY
+    V.VENUE_CODE,
+    V.VENUE_NAME,
+    S.DAY
+HAVING
+    COUNT_EVENTS = (
+        SELECT
+            MAX(COUNT(DISTINCT S2.EVENT_ID))
+        FROM
+            SCHEDULE S2
+        WHERE
+            S2.VENUE = V.VENUE_CODE
+        GROUP BY
+            S2.DAY
+    )
+ORDER BY
+    V.VENUE_NAME,
+    S.DAY;
+
+-- Validation
+SELECT
+    V.VENUE_NAME,
+    S.DAY,
+    E.EVENT_NAME
+FROM
+         VENUE V
+    JOIN SCHEDULE S ON V.VENUE_CODE = S.VENUE
+    JOIN EVENT    E ON S.EVENT_ID = E.EVENT_ID
+WHERE
+        V.VENUE_NAME = 'Aquatics Centre'
+    AND S.DAY = TO_DATE('06/08/2024 00:00', 'DD/MM/YYYY HH24:MI')
+ORDER BY
+    E.EVENT_NAME;
+
+
+-- 25) Which countries have the largest number of athletes competing but have not won any medals so far?
+SELECT
+    C.COUNTRY,
+    COUNT(A.ATHLETE_CODE) AS TOTAL_ATHLETES
+FROM
+         COUNTRY C
+    JOIN PERSON  P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE A ON P.PERSON_CODE = A.ATHLETE_CODE
+WHERE
+    C.NOC_CODE NOT IN (
+        SELECT DISTINCT
+            C3.NOC_CODE
+        FROM
+                 COUNTRY C3
+            JOIN PERSON       P2 ON C3.NOC_CODE = P2.NOC_CODE
+            JOIN ATHLETE      A2 ON P2.PERSON_CODE = A2.ATHLETE_CODE
+            JOIN ATHLETE_WINS AW ON A2.ATHLETE_CODE = AW.ATHLETE_CODE
+        WHERE
+            AW.IS_MEDALLIST = 'True'
+    )
+GROUP BY
+    C.COUNTRY
+ORDER BY
+    TOTAL_ATHLETES DESC;
+
+-- Validation
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME,
+    AW.IS_MEDALLIST
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    LEFT JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+    C.COUNTRY = 'Venezuela'
+ORDER BY
+    ATHLETE_NAME;
+
+
+-- 26) Which countries have won more team gold medals than the combined total of their team silver and bronze medals?
+SELECT
+    C.COUNTRY,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Gold Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS GOLD_COUNT,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE IN('Silver Medal', 'Bronze Medal') THEN
+                1
+            ELSE
+                0
+        END
+    ) AS SILVER_BRONZE
+FROM
+         COUNTRY C
+    JOIN TEAM_REPRESENTS TR ON C.NOC_CODE = TR.NOC_CODE
+    JOIN TEAM            T ON TR.TEAM_CODE = T.TEAM_CODE
+    JOIN TEAM_WINS       TW ON T.TEAM_CODE = TW.TEAM_CODE
+    JOIN MEDAL           M ON TW.MEDAL_ID = M.MEDAL_ID
+WHERE
+    TW.IS_MEDALLIST = 'True'
+GROUP BY
+    C.COUNTRY
+HAVING
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Gold Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) > SUM(
+        CASE
+            WHEN M.MEDAL_TYPE IN('Silver Medal', 'Bronze Medal') THEN
+                1
+            ELSE
+                0
+        END
+    )
+ORDER BY
+    GOLD_COUNT DESC;
+
+-- Validation
+SELECT
+    C.COUNTRY,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Gold Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS GOLD,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Silver Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS SILVER,
+    SUM(
+        CASE
+            WHEN M.MEDAL_TYPE = 'Bronze Medal' THEN
+                1
+            ELSE
+                0
+        END
+    ) AS BRONZE
+FROM
+         COUNTRY C
+    JOIN TEAM_REPRESENTS TR ON C.NOC_CODE = TR.NOC_CODE
+    JOIN TEAM            T ON TR.TEAM_CODE = T.TEAM_CODE
+    JOIN TEAM_WINS       TW ON TR.TEAM_CODE = TW.TEAM_CODE
+    JOIN MEDAL           M ON TW.MEDAL_ID = M.MEDAL_ID
+WHERE
+        TW.IS_MEDALLIST = 'True'
+    AND C.COUNTRY = 'United States'
+GROUP BY
+    C.COUNTRY;
+
+
+-- 27) Which countries have both individual medalists and team medalists?
+SELECT DISTINCT
+    C1.COUNTRY
+FROM
+         COUNTRY C1
+    JOIN PERSON       P ON C1.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+    AW.IS_MEDALLIST = 'True'
+INTERSECT
+SELECT DISTINCT
+    C2.COUNTRY
+FROM
+         COUNTRY C2
+    JOIN PERSON    P ON C2.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE   A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN MEMBERS   M ON A.ATHLETE_CODE = M.ATHLETE_CODE
+    JOIN TEAM      T ON M.TEAM_CODE = T.TEAM_CODE
+    JOIN TEAM_WINS TW ON T.TEAM_CODE = TW.TEAM_CODE
+WHERE
+    TW.IS_MEDALLIST = 'True';
+
+-- Validation
+SELECT
+    COUNT(DISTINCT A.ATHLETE_CODE) AS NUMBER_ATHLETES
+FROM
+         COUNTRY C
+    JOIN PERSON    P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE   A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN MEMBERS   M ON A.ATHLETE_CODE = M.ATHLETE_CODE
+    JOIN TEAM      T ON M.TEAM_CODE = T.TEAM_CODE
+    JOIN TEAM_WINS TW ON T.TEAM_CODE = TW.TEAM_CODE
+WHERE
+        C.COUNTRY = 'Italy'
+    AND TW.IS_MEDALLIST = 'True';
+
+SELECT
+    COUNT(DISTINCT A.ATHLETE_CODE) AS NUMBER_ATHLETES
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+        C.COUNTRY = 'Italy'
+    AND AW.IS_MEDALLIST = 'True';
+
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+        C.COUNTRY = 'Italy'
+    AND AW.IS_MEDALLIST = 'True'
+GROUP BY
+    ATHLETE_NAME
+ORDER BY
+    ATHLETE_NAME DESC;
+
+SELECT
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         COUNTRY C
+    JOIN PERSON    P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE   A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN MEMBERS   M ON A.ATHLETE_CODE = M.ATHLETE_CODE
+    JOIN TEAM      T ON M.TEAM_CODE = T.TEAM_CODE
+    JOIN TEAM_WINS TW ON T.TEAM_CODE = TW.TEAM_CODE
+WHERE
+        C.COUNTRY = 'Italy'
+    AND TW.IS_MEDALLIST = 'True'
+GROUP BY
+    ATHLETE_NAME
+ORDER BY
+    ATHLETE_NAME DESC;
+
+
+-- 28) Which sport is the most trained among athletes that have won a medal?
+SELECT
+    SP.SPORT,
+    COUNT(DISTINCT TNS.TRAINING_ID) AS TOTAL_SESSIONS
+FROM
+         ATHLETE A
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN PRACTICES    PRC ON A.ATHLETE_CODE = PRC.ATHLETE_CODE
+    JOIN SPORT        SP ON PRC.SPORT_CODE = SP.SPORT_CODE
+    JOIN TRAINS       TNS ON A.ATHLETE_CODE = TNS.ATHLETE_CODE
+WHERE
+    AW.IS_MEDALLIST = 'True'
+GROUP BY
+    SP.SPORT,
+    SP.SPORT_CODE
+ORDER BY
+    TOTAL_SESSIONS DESC
+FETCH FIRST 1 ROWS ONLY;
+
+-- Validation
+
+SELECT
+    SP.SPORT,
+    COUNT(DISTINCT TNS.TRAINING_ID) AS TOTAL_SESSIONS
+FROM
+         ATHLETE A
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN PRACTICES    PRC ON A.ATHLETE_CODE = PRC.ATHLETE_CODE
+    JOIN SPORT        SP ON PRC.SPORT_CODE = SP.SPORT_CODE
+    JOIN TRAINS       TNS ON A.ATHLETE_CODE = TNS.ATHLETE_CODE
+WHERE
+    AW.IS_MEDALLIST = 'True'
+GROUP BY
+    SP.SPORT,
+    SP.SPORT_CODE
+ORDER BY
+    TOTAL_SESSIONS DESC
+FETCH FIRST 5 ROWS ONLY;
+
+SELECT
+    SP.SPORT,
+    TNS.TRAINING_ID
+FROM
+         ATHLETE A
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+    JOIN PRACTICES    PRC ON A.ATHLETE_CODE = PRC.ATHLETE_CODE
+    JOIN SPORT        SP ON PRC.SPORT_CODE = SP.SPORT_CODE
+    JOIN TRAINS       TNS ON A.ATHLETE_CODE = TNS.ATHLETE_CODE
+WHERE
+        AW.IS_MEDALLIST = 'True'
+    AND SP.SPORT = 'Athletics'
+GROUP BY
+    SP.SPORT,
+    TNS.TRAINING_ID;
+
+
+-- 29) Which venues have had at least one scheduled event on both the first and the last day of the Olympics
+SELECT
+    V.VENUE_NAME
+FROM
+         VENUE V
+    JOIN SCHEDULE S ON V.VENUE_CODE = S.VENUE
+WHERE
+    TRUNC(S.DAY) = (
+        SELECT
+            MIN(TRUNC(DAY))
+        FROM
+            SCHEDULE
+    )
+INTERSECT
+SELECT
+    V.VENUE_NAME
+FROM
+         VENUE V
+    JOIN SCHEDULE S ON V.VENUE_CODE = S.VENUE
+WHERE
+    TRUNC(S.DAY) = (
+        SELECT
+            MAX(TRUNC(DAY))
+        FROM
+            SCHEDULE
+    );
+
+-- Validation
+SELECT DISTINCT
+    V.VENUE_NAME
+FROM
+         VENUE V
+    JOIN SCHEDULE S ON V.VENUE_CODE = S.VENUE
+WHERE
+    TRUNC(S.DAY) = (
+        SELECT
+            MIN(TRUNC(DAY))
+        FROM
+            SCHEDULE
+    );
+
+SELECT DISTINCT
+    V.VENUE_NAME
+FROM
+         VENUE V
+    JOIN SCHEDULE S ON V.VENUE_CODE = S.VENUE
+WHERE
+    TRUNC(S.DAY) = (
+        SELECT
+            MAX(TRUNC(DAY))
+        FROM
+            SCHEDULE
+    );
+
+
+-- 30)  Which are the top 3 countries with the highest number of athlete medalists whose training sessions have an intensity level above 7?
+SELECT
+    C.COUNTRY,
+    COUNT(DISTINCT A.ATHLETE_CODE) AS MEDALLIST_COUNT
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN TRAINS       TRS ON A.ATHLETE_CODE = TRS.ATHLETE_CODE
+    JOIN TRAINING     TNG ON TRS.TRAINING_ID = TNG.TRAINING_ID
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+        TNG.INTENSITY_LEVEL > 7
+    AND AW.IS_MEDALLIST = 'True'
+GROUP BY
+    C.COUNTRY
+ORDER BY
+    MEDALLIST_COUNT DESC
+FETCH FIRST 3 ROWS ONLY;
+
+-- Validation
+
+SELECT
+    C.COUNTRY,
+    P.FIRST_NAME
+    || ' '
+    || P.SECOND_NAME AS ATHLETE_NAME
+FROM
+         COUNTRY C
+    JOIN PERSON       P ON C.NOC_CODE = P.NOC_CODE
+    JOIN ATHLETE      A ON P.PERSON_CODE = A.ATHLETE_CODE
+    JOIN TRAINS       TRS ON A.ATHLETE_CODE = TRS.ATHLETE_CODE
+    JOIN TRAINING     TNG ON TRS.TRAINING_ID = TNG.TRAINING_ID
+    JOIN ATHLETE_WINS AW ON A.ATHLETE_CODE = AW.ATHLETE_CODE
+WHERE
+        TNG.INTENSITY_LEVEL > 7
+    AND AW.IS_MEDALLIST = 'True'
+    AND C.COUNTRY = 'United States'
+GROUP BY
+    C.COUNTRY,
+    P.FIRST_NAME,
+    P.SECOND_NAME;
+
+
+----------- TRIGGERS -----------
+
+-- Trigger 1
+
+-- Undoing possible previous changes
+DELETE FROM TRAINING
+WHERE
+    TRAINING_ID = 3000000;
+
+DELETE FROM TRAINING
+WHERE
+    TRAINING_ID = 3000001;
+
+DROP TRIGGER WARNING_NULL_TRAINING_DATE;
+
+DROP TABLE WARNING;
+
+CREATE TABLE WARNING (
+    WARNING_ID   NUMBER GENERATED BY DEFAULT AS IDENTITY,
+    TRAINING_ID  NUMBER,
+    MESSAGE      VARCHAR2(200),
+    CURRENT_TIME TIMESTAMP,
+    PRIMARY KEY ( WARNING_ID )
+);
+--
+
+CREATE OR REPLACE TRIGGER WARNING_NULL_TRAINING_DATE BEFORE
+    INSERT OR UPDATE ON TRAINING
+    FOR EACH ROW
+BEGIN
+    IF :NEW.TRAINING_DATE IS NULL THEN
+        INSERT INTO WARNING (
+            TRAINING_ID,
+            MESSAGE,
+            CURRENT_TIME
+        ) VALUES ( :NEW.TRAINING_ID,
+                   'Training date is NULL',
+                   SYSTIMESTAMP );
+
+    END IF;
+END;
+/
+
+-- Validation Trigger 1
+
+DELETE FROM TRAINING
+WHERE
+    TRAINING_ID = 3000000;
+
+DELETE FROM TRAINING
+WHERE
+    TRAINING_ID = 3000001;
+
+INSERT INTO TRAINING (
+    TRAINING_ID,
+    TRAINING_DATE,
+    DURATION,
+    INTENSITY_LEVEL
+) VALUES ( 3000000,
+           NULL,
+           45,
+           5 );
+
+INSERT INTO TRAINING (
+    TRAINING_ID,
+    TRAINING_DATE,
+    DURATION,
+    INTENSITY_LEVEL
+) VALUES ( 3000001,
+           TO_DATE('29/08/2006', 'DD/MM/YYYY'),
+           60,
+           4 );
+
+SELECT
+    *
+FROM
+    WARNING;
+--
+
+
+-- Trigger 2
+
+-- Undoing possible previous changes
+UPDATE PERSON
+SET
+    IS_CURRENT = 'True'
+WHERE
+    PERSON_CODE = 1878715;
+
+DELETE FROM TRAINS
+WHERE
+        TRAINING_ID = 100000
+    AND ATHLETE_CODE = 1878715;
+
+DELETE FROM TRAINING
+WHERE
+    TRAINING_ID = 100000;
+--
+DROP TRIGGER ATHLETE_CURRENT_TRAINING;
+
+CREATE OR REPLACE TRIGGER ATHLETE_CURRENT_TRAINING AFTER
+    INSERT ON TRAINS
+DECLARE
+    V_HIGH_COUNT NUMBER;
+BEGIN
+    FOR R IN (
+        SELECT DISTINCT
+            ATHLETE_CODE
+        FROM
+            TRAINS
+        WHERE
+            ATHLETE_CODE IN (
+                SELECT
+                    ATHLETE_CODE
+                FROM
+                    TRAINS
+            )
+    ) LOOP
+        SELECT
+            COUNT(*)
+        INTO V_HIGH_COUNT
+        FROM
+                 TRAINS T
+            JOIN TRAINING TR ON TR.TRAINING_ID = T.TRAINING_ID
+        WHERE
+                T.ATHLETE_CODE = R.ATHLETE_CODE
+            AND TR.INTENSITY_LEVEL > 6;
+
+        IF V_HIGH_COUNT >= 3 THEN
+            UPDATE PERSON
+            SET
+                IS_CURRENT = 'True'
+            WHERE
+                PERSON_CODE = R.ATHLETE_CODE;
+
+        END IF;
+
+    END LOOP;
+
+    DBMS_OUTPUT.PUT_LINE('High intensity count: ' || V_HIGH_COUNT); --validation purposes
+END;
+/
+
+-- Validation Trigger 2
+
+UPDATE PERSON
+SET
+    IS_CURRENT = 'False'
+WHERE
+    PERSON_CODE = 1878715;
+
+DELETE FROM TRAINS
+WHERE
+        TRAINING_ID = 100000
+    AND ATHLETE_CODE = 1878715;
+
+DELETE FROM TRAINING
+WHERE
+    TRAINING_ID = 100000;
+
+INSERT INTO TRAINING (
+    TRAINING_ID,
+    TRAINING_DATE,
+    DURATION,
+    INTENSITY_LEVEL
+) VALUES ( 100000,
+           SYSDATE,
+           60,
+           8 );
+
+INSERT INTO TRAINS (
+    ATHLETE_CODE,
+    TRAINING_ID
+) VALUES ( 1878715,
+           100000 );
+
+SELECT
+    A.ATHLETE_CODE,
+    P.IS_CURRENT
+FROM
+         PERSON P
+    JOIN ATHLETE A ON A.ATHLETE_CODE = P.PERSON_CODE
+WHERE
+    PERSON_CODE = 1878715;
+
+
+-- Trigger 3
+
+---- Undoing possible previous changes
+DELETE FROM MEDAL_HISTORY
+WHERE
+        ATHLETE_CODE = 1566564
+    AND MEDAL_TYPE = 'Gold Medal';
+
+DELETE FROM ATHLETE_WINS
+WHERE
+        MEDAL_ID = 99999
+    AND ATHLETE_CODE = 1566564;
+
+DELETE FROM MEDAL
+WHERE
+    MEDAL_ID = 99999;
+
+DROP TRIGGER HISTORY_MEDAL_WIN;
+
+DROP TABLE MEDAL_HISTORY;
+--
+
+CREATE TABLE MEDAL_HISTORY (
+    HISTORY_ID   NUMBER(10) GENERATED BY DEFAULT AS IDENTITY,
+    ATHLETE_CODE NUMBER(10),
+    FIRST_NAME   VARCHAR2(255),
+    SECOND_NAME  VARCHAR2(255),
+    MEDAL_TYPE   VARCHAR2(25),
+    MEDAL_LABEL  VARCHAR2(10),
+    IS_MEDALLIST VARCHAR2(5),
+    LOG_TIME     DATE DEFAULT SYSDATE,
+    PRIMARY KEY ( HISTORY_ID )
+);
+
+CREATE OR REPLACE TRIGGER HISTORY_MEDAL_WIN AFTER
+    INSERT ON ATHLETE_WINS
+    FOR EACH ROW
+DECLARE
+    V_FIRST_NAME  VARCHAR2(255);
+    V_SECOND_NAME VARCHAR2(255);
+    V_MEDAL_TYPE  VARCHAR2(25);
+    V_LABEL       VARCHAR2(10);
+BEGIN
+    SELECT
+        P.FIRST_NAME,
+        P.SECOND_NAME
+    INTO
+        V_FIRST_NAME,
+        V_SECOND_NAME
+    FROM
+        PERSON P
+    WHERE
+        P.PERSON_CODE = :NEW.ATHLETE_CODE;
+
+    SELECT
+        M.MEDAL_TYPE
+    INTO V_MEDAL_TYPE
+    FROM
+        MEDAL M
+    WHERE
+        M.MEDAL_ID = :NEW.MEDAL_ID;
+
+    CASE
+        WHEN V_MEDAL_TYPE = 'Gold Medal' THEN
+            V_LABEL := 'GOLD';
+        WHEN V_MEDAL_TYPE = 'Silver Medal' THEN
+            V_LABEL := 'SILVER';
+        WHEN V_MEDAL_TYPE = 'Bronze Medal' THEN
+            V_LABEL := 'BRONZE';
+        ELSE
+            V_LABEL := 'NONE';
+    END CASE;
+
+    IF :NEW.IS_MEDALLIST = 'True' THEN
+        INSERT INTO MEDAL_HISTORY (
+            ATHLETE_CODE,
+            FIRST_NAME,
+            SECOND_NAME,
+            MEDAL_TYPE,
+            MEDAL_LABEL,
+            IS_MEDALLIST,
+            LOG_TIME
+        ) VALUES ( :NEW.ATHLETE_CODE,
+                   V_FIRST_NAME,
+                   V_SECOND_NAME,
+                   V_MEDAL_TYPE,
+                   V_LABEL,
+                   :NEW.IS_MEDALLIST,
+                   SYSDATE );
+
+    ELSE
+        INSERT INTO MEDAL_HISTORY (
+            ATHLETE_CODE,
+            FIRST_NAME,
+            SECOND_NAME,
+            MEDAL_TYPE,
+            MEDAL_LABEL,
+            IS_MEDALLIST,
+            LOG_TIME
+        ) VALUES ( :NEW.ATHLETE_CODE,
+                   V_FIRST_NAME,
+                   V_SECOND_NAME,
+                   V_MEDAL_TYPE,
+                   'NONE',
+                   :NEW.IS_MEDALLIST,
+                   SYSDATE );
+
+    END IF;
+
+END;
+/
+
+-- Validation Trigger 3
+
+SELECT
+    *
+FROM
+    MEDAL_HISTORY
+ORDER BY
+    HISTORY_ID DESC
+FETCH FIRST 5 ROWS ONLY;
+
+INSERT INTO MEDAL (
+    MEDAL_ID,
+    MEDAL_TYPE,
+    MEDAL_CODE,
+    MEDAL_DATE
+) VALUES ( 99999,
+           'Gold Medal',
+           999,
+           SYSDATE );
+
+INSERT INTO ATHLETE_WINS (
+    MEDAL_ID,
+    ATHLETE_CODE,
+    IS_MEDALLIST
+) VALUES ( 99999,
+           1566564,
+           'True' );
+
+SELECT
+    *
+FROM
+    MEDAL_HISTORY
+ORDER BY
+    HISTORY_ID DESC
+FETCH FIRST 1 ROW ONLY;
+
+-- Expected: medal_label = 'GOLD', is_medallist = 'True'
